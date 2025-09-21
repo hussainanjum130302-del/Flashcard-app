@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flashcard Maker</title>
+<style>
+  :root{
+    --bg:#0f1724; --card:#0b1220; --accent:#7c3aed; --muted:#94a3b8; --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:linear-gradient(180deg,#071029 0%, #071229 100%); color:#e6eef8;
+    display:flex; align-items:flex-start; justify-content:center; padding:32px;
+  }
+  .app{
+    width:980px; max-width:95vw; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:12px; padding:20px; box-shadow:0 8px 30px rgba(2,6,23,0.6);
+    display:grid; grid-template-columns: 360px 1fr; gap:18px;
+  }
+
+  h1{margin:0 0 8px 0; font-size:20px}
+  .panel{background:var(--card); padding:14px; border-radius:10px; min-height:120px}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px}
+  input[type="text"], textarea{
+    width:100%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:var(--glass); color:inherit;
+    font-size:14px; outline:none;
+  }
+  textarea{resize:vertical; min-height:70px}
+  .btn{display:inline-block; padding:10px 12px; border-radius:8px; background:linear-gradient(90deg,var(--accent), #5b21b6); color:white; cursor:pointer; border:none; font-weight:600; box-shadow:0 6px 18px rgba(124,58,237,0.18)}
+  .btn.ghost{background:transparent; border:1px solid rgba(255,255,255,0.04); box-shadow:none; color:var(--muted)}
+  .row{display:flex; gap:8px; align-items:center}
+  .small{font-size:13px; color:var(--muted)}
+  .cards-list{max-height:520px; overflow:auto; margin-top:10px; display:flex; flex-direction:column; gap:8px}
+  .card-item{
+    background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent); padding:10px; border-radius:8px; display:flex; gap:8px; align-items:center;
+    border:1px solid rgba(255,255,255,0.02);
+  }
+  .card-text{flex:1; min-width:0}
+  .card-front{font-weight:700}
+  .card-back{color:var(--muted); font-size:13px; margin-top:6px}
+  .controls{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap}
+
+  /* Study view */
+  .study-area{display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; padding:24px}
+  .study-card{
+    width:100%; max-width:520px; min-height:200px; border-radius:12px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    display:flex; align-items:center; justify-content:center; padding:20px; text-align:center; font-size:22px; position:relative; border:1px solid rgba(255,255,255,0.03);
+    transition:transform .28s ease;
+  }
+  .study-card.hint{font-size:15px; color:var(--muted)}
+  .utility{display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center}
+  .meta{color:var(--muted); font-size:13px}
+
+  /* responsive */
+  @media (max-width:880px){ .app{grid-template-columns:1fr; align-items:start} }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Flashcard Maker">
+    <!-- Left: create / list -->
+    <div>
+      <div class="panel">
+        <h1>Flashcard Maker</h1>
+        <div class="small">Create new flashcards. They save to your browser automatically.</div>
+        <div style="height:10px"></div>
+
+        <label for="front">Front (question)</label>
+        <input id="front" type="text" placeholder="Type the question or prompt..." />
+
+        <label for="back" style="margin-top:8px">Back (answer)</label>
+        <textarea id="back" placeholder="Type the answer or notes..."></textarea>
+
+        <div class="row" style="margin-top:10px;">
+          <button id="addBtn" class="btn">Add card</button>
+          <button id="clearAll" class="btn ghost">Clear all</button>
+          <div style="flex:1"></div>
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+          <button id="exportBtn" class="btn ghost">Export JSON</button>
+          <label class="btn ghost" for="importFile" style="cursor:pointer">Import JSON</label>
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
+          <button id="shuffleBtn" class="btn ghost">Shuffle</button>
+          <button id="studyBtn" class="btn" style="margin-left:auto">Study</button>
+        </div>
+
+        <div class="cards-list" id="cardsList" aria-live="polite" style="margin-top:12px"></div>
+      </div>
+
+      <div class="panel" style="margin-top:12px">
+        <div class="small" style="margin-bottom:6px"><strong>Quick tips</strong></div>
+        <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:13px;">
+          <li>Use short questions on the front, detailed notes on back.</li>
+          <li>Export before clearing if you want a backup.</li>
+          <li>Shuffle to practice randomly.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Right: study area -->
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <h1 style="margin:0">Study</h1>
+            <div class="small meta" id="countMeta">0 cards</div>
+          </div>
+        </div>
+        <div class="row">
+          <button id="prevBtn" class="btn ghost">Prev</button>
+          <button id="flipBtn" class="btn ghost">Flip</button>
+          <button id="nextBtn" class="btn ghost">Next</button>
+        </div>
+      </div>
+
+      <div class="study-area" style="margin-top:12px">
+        <div id="studyCard" class="study-card hint">Add some cards and press Study →</div>
+
+        <div class="utility">
+          <button id="markKnown" class="btn ghost">I knew it</button>
+          <button id="markUnknown" class="btn ghost">I didn't know</button>
+          <button id="resetProgress" class="btn ghost">Reset progress</button>
+        </div>
+
+        <div class="small meta" id="progressText">Progress: 0 / 0</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'vibe_flashcards_v1';
+  let cards = [];
+  let index = 0;
+  let showingBack = false;
+  let progress = {}; // id -> known/unknown
+
+  // DOM
+  const frontInput = document.getElementById('front');
+  const backInput = document.getElementById('back');
+  const addBtn = document.getElementById('addBtn');
+  const cardsList = document.getElementById('cardsList');
+  const studyBtn = document.getElementById('studyBtn');
+  const studyCard = document.getElementById('studyCard');
+  const countMeta = document.getElementById('countMeta');
+  const progressText = document.getElementById('progressText');
+  const flipBtn = document.getElementById('flipBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const shuffleBtn = document.getElementById('shuffleBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const importFile = document.getElementById('importFile');
+  const clearAll = document.getElementById('clearAll');
+  const markKnown = document.getElementById('markKnown');
+  const markUnknown = document.getElementById('markUnknown');
+  const resetProgress = document.getElementById('resetProgress');
+
+  // helpers
+  const uid = ()=>Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  const save = ()=>localStorage.setItem(STORAGE_KEY, JSON.stringify({cards, progress}));
+  const load = ()=>{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) try{ const obj = JSON.parse(raw); cards = obj.cards||[]; progress = obj.progress||{}; }catch(e){}
+  };
+  const renderList = ()=>{
+    cardsList.innerHTML = '';
+    if(cards.length===0){ cardsList.innerHTML = '<div class="small" style="padding:8px;color:var(--muted)">No cards yet</div>'; }
+    cards.forEach((c,i)=>{
+      const el = document.createElement('div');
+      el.className = 'card-item';
+      el.innerHTML = `
+        <div class="card-text">
+          <div class="card-front">${escapeHtml(c.front)}</div>
+          <div class="card-back">${escapeHtml(c.back)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <button class="btn ghost btn-edit" data-i="${i}" title="Edit">Edit</button>
+          <button class="btn ghost btn-del" data-i="${i}" title="Delete">Del</button>
+        </div>
+      `;
+      cardsList.appendChild(el);
+    });
+    attachListHandlers();
+    updateMeta();
+  };
+  const attachListHandlers = ()=>{
+    const dels = cardsList.querySelectorAll('.btn-del');
+    dels.forEach(btn=>{
+      btn.onclick = ()=>{ const i = +btn.dataset.i; if(confirm('Delete this card?')){ cards.splice(i,1); save(); renderList(); if(index>=cards.length) index = Math.max(0,cards.length-1); updateStudyView(); } };
+    });
+    const edits = cardsList.querySelectorAll('.btn-edit');
+    edits.forEach(btn=>{
+      btn.onclick = ()=>{ const i = +btn.dataset.i; const c = cards[i]; frontInput.value = c.front; backInput.value = c.back; frontInput.focus(); // replace on next add
+        // to replace the card we store a hidden id
+        addBtn.dataset.replace = i;
+      };
+    });
+  };
+  const updateMeta = ()=>{ countMeta.textContent = `${cards.length} card${cards.length===1?'':'s'}`; updateProgressText(); };
+  const updateProgressText = ()=>{ const total = cards.length; const known = Object.values(progress).filter(v=>v==='known').length; progressText.textContent = `Progress: ${known} / ${total}`; };
+
+  // study
+  const updateStudyView = ()=>{
+    if(cards.length===0){ studyCard.textContent = 'Add some cards and press Study →'; studyCard.className='study-card hint'; return; }
+    const c = cards[index];
+    showingBack = false;
+    studyCard.className = 'study-card';
+    studyCard.innerHTML = `<div><div style="font-weight:700">${escapeHtml(c.front)}</div><div style="margin-top:8px;color:var(--muted);font-size:13px">Tap Flip to see the answer</div></div>`;
+    updateMeta();
+  };
+  const flip = ()=>{
+    if(cards.length===0) return;
+    const c = cards[index];
+    showingBack = !showingBack;
+    if(showingBack){
+      studyCard.innerHTML = `<div><div style="font-weight:700">${escapeHtml(c.back)}</div><div style="margin-top:8px;color:var(--muted);font-size:13px">This is the answer</div></div>`;
+    } else {
+      updateStudyView();
+    }
+  };
+
+  // navigation
+  const next = ()=>{
+    if(cards.length===0) return;
+    index = (index + 1) % cards.length;
+    updateStudyView();
+  };
+  const prev = ()=>{
+    if(cards.length===0) return;
+    index = (index - 1 + cards.length) % cards.length;
+    updateStudyView();
+  };
+  const shuffle = ()=>{
+    for(let i=cards.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [cards[i],cards[j]]=[cards[j],cards[i]];
+    }
+    index = 0; save(); renderList(); updateStudyView();
+  };
+
+  // export/import
+  const exportJSON = ()=>{
+    const payload = {cards, progress, exportedAt: new Date().toISOString()};
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'flashcards.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const importJSON = (file)=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      try{
+        const obj = JSON.parse(e.target.result);
+        if(Array.isArray(obj.cards)){
+          cards = obj.cards;
+          progress = obj.progress || {};
+          save(); renderList(); index = 0; updateStudyView();
+          alert('Imported ' + cards.length + ' cards.');
+        } else alert('Invalid file.');
+      }catch(err){ alert('Could not parse file.'); }
+    };
+    reader.readAsText(file);
+  };
+
+  // events
+  addBtn.onclick = ()=>{
+    const f = frontInput.value.trim();
+    const b = backInput.value.trim();
+    if(!f){ frontInput.focus(); return alert('Please type the front of the card.'); }
+    const replaceIndex = addBtn.dataset.replace;
+    if(replaceIndex !== undefined){
+      const i = +replaceIndex;
+      cards[i].front = f; cards[i].back = b;
+      delete addBtn.dataset.replace;
+    } else {
+      cards.push({id: uid(), front: f, back: b});
+    }
+    frontInput.value=''; backInput.value=''; frontInput.focus();
+    save(); renderList(); updateStudyView();
+  };
+
+  studyBtn.onclick = ()=>{
+    if(cards.length===0){ alert('Make some cards first!'); return; }
+    index = 0; updateStudyView();
+  };
+  flipBtn.onclick = flip;
+  prevBtn.onclick = prev;
+  nextBtn.onclick = next;
+  shuffleBtn.onclick = ()=>{ if(cards.length===0) return; shuffle(); };
+  exportBtn.onclick = exportJSON;
+  importFile.onchange = (e)=>{ const f = e.target.files[0]; if(f) importJSON(f); e.target.value=''; };
+  clearAll.onclick = ()=>{
+    if(!confirm('Clear all cards? This cannot be undone unless you exported them.')) return;
+    cards = []; progress = {}; save(); renderList(); updateStudyView();
+  };
+  markKnown.onclick = ()=>{
+    if(cards.length===0) return;
+    progress[cards[index].id] = 'known';
+    save(); updateMeta();
+  };
+  markUnknown.onclick = ()=>{
+    if(cards.length===0) return;
+    progress[cards[index].id] = 'unknown';
+    save(); updateMeta();
+  };
+  resetProgress.onclick = ()=>{
+    if(!confirm('Reset study progress?')) return;
+    progress = {}; save(); updateMeta();
+  };
+
+  // util
+  function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+  // init
+  load(); renderList(); updateStudyView();
+  // keyboard shortcuts
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='ArrowRight') next();
+    if(e.key==='ArrowLeft') prev();
+    if(e.key===' ') { e.preventDefault(); flip(); }
+  });
+})();
+</script>
+</body>
+</html>
